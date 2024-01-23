@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+  <extension point="org.eclipse.ui.importWizards">
+    <category name="Elph"
+      id="io.openliberty.elph"/>
+    <wizard name="Import Liberty Projects"
+      class="io.openliberty.elph.importer.ImportLibertyProjectsWizard"
+      category="io.openliberty.elph"
+      id="io.openliberty.elph.importer.importLibertyProjectsWizard"/>
+  </extension>
+
+
+</plugin>
