@@ -35,9 +35,7 @@ class LocateRepoPage extends WizardPage {
 		String olPathTemplate = "Open Liberty repository: ";
 		Label olLabel = new Label(page, SWT.NONE);
 		olLabel.setLayoutData(new GridData(SWT.FILL, SWT.TOP, true, false, 3, 1));
-		String olRepo = new Config().readOlRepoPath().map(Path::toString).orElse(null);
-		if (olRepo != null) olLabel.setText(olPathTemplate + olRepo);
-		else olLabel.setText(olPathTemplate + "<unspecified>");
+		olLabel.setText(olPathTemplate + "<unspecified>");
 		    
 		Button fileBrowser = new Button(page, SWT.PUSH);
 		fileBrowser.setText("Browse");

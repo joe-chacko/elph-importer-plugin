@@ -9,4 +9,10 @@ Require-Bundle: system.bundle,
  org.eclipse.core.runtime;bundle-version="3.30.0"
 Bundle-Vendor: IBM
 Automatic-Module-Name: io.openliberty.elph.importer
+Bundle-ClassPath: lib/jgrapht-core-1.5.1.jar,
+ lib/jheaps-0.13.jar,
+ .,
+ lib/commons-collections4-4.4.jar,
+ lib/commons-lang3-3.8.jar,
+ lib/biz.aQute.bnd-6.4.1.jar
 Bundle-RequiredExecutionEnvironment: JavaSE-17

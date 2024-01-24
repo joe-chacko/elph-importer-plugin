@@ -8,7 +8,7 @@ import org.eclipse.ui.IWorkbench;
 public class ImportLibertyProjectsWizard extends Wizard implements IImportWizard {
 	private final Config config = new Config();
 	private Controller controller;
-//	private ImportPage importPage;
+	private ImportPage importPage;
 
 	public ImportLibertyProjectsWizard() {
 		this.controller = config.readOlRepoPath().map(Controller::new).orElse(null);
@@ -17,9 +17,8 @@ public class ImportLibertyProjectsWizard extends Wizard implements IImportWizard
 
 	@Override
 	public void addPages() {
-		addPage(new LocateRepoPage());
-//		if (null == controller) addPage(new LocateRepoPage());
-//		addPage(importPage = new ImportPage());
+		if (null == controller) addPage(new LocateRepoPage());
+		addPage(importPage = new ImportPage());
 	}
 
 	@Override
@@ -30,7 +29,7 @@ public class ImportLibertyProjectsWizard extends Wizard implements IImportWizard
 	@Override
 	public boolean performFinish() {
 		System.out.println("*** PERFORM FINISH ***");
-//		importPage.importAllProjects();
+		importPage.importAllProjects();
 		return true;
 	}
 }
