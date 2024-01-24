@@ -5,7 +5,7 @@
          point="org.eclipse.ui.importWizards">
       <category
             id="io.openliberty.elph"
-            name="Eclipse Liberty Project Helper">
+            name="Elph">
       </category>
       <wizard
             category="io.openliberty.elph"
