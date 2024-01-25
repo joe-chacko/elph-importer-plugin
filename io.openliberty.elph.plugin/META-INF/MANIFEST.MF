@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: ELPH Importer Plugin
-Bundle-SymbolicName: io.openliberty.elph.importer;singleton:=true
+Bundle-SymbolicName: io.openliberty.elph.plugin;singleton:=true
 Bundle-Version: 1.0.0.beta
 Require-Bundle: system.bundle,
  org.eclipse.ui;bundle-version="3.205.0",
