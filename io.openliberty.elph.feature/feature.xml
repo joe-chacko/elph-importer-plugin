@@ -300,7 +300,7 @@ version(s), and exceptions or additional permissions here}.&quot;
    </license>
 
    <plugin
-         id="io.openliberty.elph.importer"
-         version="1.0.0.beta"/>
+         id="io.openliberty.elph.plugin"
+         version="0.0.0"/>
 
 </feature>
