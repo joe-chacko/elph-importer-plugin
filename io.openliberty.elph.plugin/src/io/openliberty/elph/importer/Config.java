@@ -1,6 +1,5 @@
 package io.openliberty.elph.importer;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.eclipse.core.runtime.Platform.getStateLocation;
 import static org.eclipse.ui.XMLMemento.createReadRoot;
 import static org.osgi.framework.FrameworkUtil.getBundle;
@@ -23,7 +22,7 @@ class Config {
 	private static final String OL_REPO_NODE = "open-liberty-repo";
 	private static final Bundle bundle = getBundle(Config.class);
 	/** a plugin-specific location in the Eclipse workspace */
-	private static final Path configPath = getStateLocation(bundle).toPath().resolve("settings.xml");
+	private static final Path configPath = getStateLocation(bundle).toFile().toPath().resolve("settings.xml"); // IPath.toPath() is new in eclipse 3.18
 
 	Optional<Path> readOlRepoPath() {
 		if (!Files.exists(configPath)) {

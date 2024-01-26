@@ -69,6 +69,5 @@ enum EclipseProjects {
 			}
 		};
 		job.schedule();
-		
 	}
 }

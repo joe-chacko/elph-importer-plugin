@@ -4,7 +4,9 @@ import static io.openliberty.elph.importer.EclipseProjects.importProjects;
 import static java.io.File.separator;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toCollection;
+import static java.util.stream.Collectors.toList;
 import static java.util.stream.Stream.concat;
+import static org.eclipse.core.runtime.Status.OK_STATUS;
 
 import java.nio.file.Path;
 import java.text.Collator;
@@ -19,6 +21,9 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.wizard.WizardPage;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.dnd.DND;
@@ -71,7 +76,7 @@ class ImportPage extends WizardPage {
 
 		page.setLayout(new GridLayout(3, false));
 		Label importLabel = new Label(page, SWT.WRAP);
-		importLabel.setText("Please type below the project you would like to import");
+		importLabel.setText("Type to filter the project list (use * for wildcard)");
 		importLabel.setLayoutData(new GridData(SWT.LEFT, SWT.BOTTOM, true, false, 3, 1));
 
 		Text projectFilterText = new Text(page, SWT.BORDER);
@@ -109,11 +114,23 @@ class ImportPage extends WizardPage {
 	public String getTitle() { return "Eclipse Liberty Project Helper"; }
 
 	void importAllProjects() {
-		Controller controller = Controller.getController();
-		Set<Path> bndProjects = new HashSet<>();
-		controller.findProjectsAndDeps(stream(depsTable), bndProjects, false);
-		controller.findProjectsAndDeps(stream(usersTable), bndProjects, true);
-		importProjects(controller.inDependencyOrder(bndProjects));
+		// Read tables now or the widget will be disposed by the time we need to
+		List<String> projectsWithDeps = stream(depsTable).collect(toList());
+		List<String> projectsWithDepsAndUsers = stream(usersTable).collect(toList());
+
+		Job job = new Job("Analyze Liberty Projects") {
+			@Override
+			protected IStatus run(IProgressMonitor monitor) {
+				Controller controller = Controller.getController();
+				controller.analyzeDependencies(monitor);
+				Set<Path> bndProjects = new HashSet<>();
+				controller.findProjectsAndDeps(projectsWithDeps, bndProjects, false);
+				controller.findProjectsAndDeps(projectsWithDepsAndUsers, bndProjects, true);
+				importProjects(controller.inDependencyOrder(bndProjects));
+				return OK_STATUS;
+			}
+		};
+		job.schedule();
 	}
 
 	private Stream<String> stream(Table table) {

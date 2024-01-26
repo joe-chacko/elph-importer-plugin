@@ -15,6 +15,8 @@ package io.openliberty.elph.bnd;
 import io.openliberty.elph.util.IO;
 import org.apache.commons.collections4.MultiValuedMap;
 import org.apache.commons.collections4.multimap.HashSetValuedHashMap;
+import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.SubMonitor;
 import org.jgrapht.Graph;
 import org.jgrapht.graph.AsSubgraph;
 import org.jgrapht.graph.DefaultEdge;
@@ -118,6 +120,8 @@ public class BndCatalog {
         if (bndQueried) return;
         synchronized (this) {
             if (bndQueried) return;
+            loadDeps();
+            if (bndQueried) return;
             var bnd = new BndWorkspace(io, root, nameIndex::get);
             Set<BndProject> bndProjects = digraph.vertexSet();
             for(BndProject p: bndProjects) bnd
@@ -134,9 +138,33 @@ public class BndCatalog {
         }
     }
 
-    public void reanalyze() {
+    public void analyze(IProgressMonitor pm) {
         bndQueried = false;
-        analyzeDependenciesUsingBnd();
+        synchronized (this) {
+            if (bndQueried) return;
+
+            var bnd = new BndWorkspace(io, root, nameIndex::get);
+            Set<BndProject> bndProjects = digraph.vertexSet();
+            SubMonitor subMonitor = SubMonitor.convert(pm, bndProjects.size());
+            for(BndProject p: bndProjects) {
+				subMonitor.setTaskName("Analyzing " + p.name);
+				subMonitor.split(1);
+            	bnd.getBuildAndTestDependencies(p)
+            			.filter(not(p::equals))
+            			.forEach(q -> digraph.addEdge(p,q));
+            }
+
+            var text = digraph.edgeSet()
+                    .stream()
+                    .map(this::formatEdge)
+                    .collect(joining("\n", "", "\n"));
+            io.writeFile(SAVE_FILE_DESC, saveFile, text);
+            bndQueried = true;
+        }
+    }
+    
+    public boolean isAnalysisComplete() {
+    	return bndQueried;
     }
 
     private String formatEdge(DefaultEdge e) {

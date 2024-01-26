@@ -2,3 +2,8 @@
 bin/
 lib/
 .gradle/
+/io.openliberty.elph.updatesite/artifacts.jar
+/io.openliberty.elph.updatesite/content.jar
+/io.openliberty.elph.updatesite/features/
+/io.openliberty.elph.updatesite/plugins/
+

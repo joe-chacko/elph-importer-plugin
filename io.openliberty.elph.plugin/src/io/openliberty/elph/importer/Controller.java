@@ -18,8 +18,9 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.eclipse.core.runtime.IProgressMonitor;
+
 import io.openliberty.elph.bnd.BndCatalog;
-import io.openliberty.elph.bnd.ProjectPaths;
 import io.openliberty.elph.util.IO;
 
 class Controller {
@@ -48,12 +49,17 @@ class Controller {
 		this(Paths.get(repo));
 	}
 	
+	
+	void analyzeDependencies(IProgressMonitor monitor) {
+		bndProjects.analyze(monitor);
+	}
+	
 	Path getRepo() {
 		return repo;
 	}
 	
     Path getRepoSettingsDir() {
-        Path dir = repo.resolve(".lct");
+        Path dir = repo.resolve(".elph");
         if (!Files.isDirectory(dir)) {
             io.verifyOrCreateDir("LCT git repository settings directory", dir);
             // make sure the entire contents of the directory are ignored, including the .gitignore
@@ -72,8 +78,8 @@ class Controller {
 		return list;
 	}
 
-	void findProjectsAndDeps(Stream<String> names, Collection<? super Path> collection, boolean includeUsers) {
-		Set<Path> set = bndProjects.findProjects(names).collect(Collectors.toSet());
+	void findProjectsAndDeps(Collection<String> names, Collection<? super Path> collection, boolean includeUsers) {
+		Set<Path> set = bndProjects.findProjects(names.stream()).collect(Collectors.toSet());
 		// add users first to pick up dependencies of users
 		if (includeUsers) addUsers(set);
 		addDeps(set);
