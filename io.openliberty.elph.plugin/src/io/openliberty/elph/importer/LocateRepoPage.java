@@ -18,11 +18,13 @@ import org.eclipse.swt.widgets.DirectoryDialog;
 import org.eclipse.swt.widgets.Label;
 
 class LocateRepoPage extends WizardPage {
-	LocateRepoPage() {
+	final Config config;
+	LocateRepoPage(Config config) {
 		super(LocateRepoPage.class.getSimpleName());
 		setTitle("Locate the Open Liberty Repository");
 		setDescription("Specify the directory containing the local Open Liberty git repository");
 		setMessage("Please choose the directory containing your local Open Liberty git repository");
+		this.config = config;
 	}
 	
 	@Override
@@ -50,7 +52,7 @@ class LocateRepoPage extends WizardPage {
 				
 				if (repo.isPresent()) {
 					// save the setting
-					new Config().saveOlRepoPath(repo.get());
+					config.saveOlRepoPath(repo.get());
 					// display the setting
 					Color black = new Color(new RGB(0, 0, 0));
 					olLabel.setForeground(black);

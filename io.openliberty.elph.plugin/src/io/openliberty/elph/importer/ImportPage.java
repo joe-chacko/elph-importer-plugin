@@ -1,6 +1,6 @@
 package io.openliberty.elph.importer;
 
-import static io.openliberty.elph.importer.EclipseProjects.importProjects;
+import static io.openliberty.elph.importer.EclipseWorkspace.importProjects;
 import static java.io.File.separator;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toCollection;
@@ -21,8 +21,6 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.eclipse.core.runtime.IProgressMonitor;
-import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.wizard.WizardPage;
 import org.eclipse.swt.SWT;
@@ -54,18 +52,22 @@ import org.eclipse.swt.widgets.Text;
 //import io.openliberty.elph.cmd.ElphCommand;
 
 class ImportPage extends WizardPage {
-	private static Table sourceTableVar = null;
-	private static boolean draggedToDropTarget = false;
-	private static Table projectsTable = null;
-	private static Table depsTable = null;
-	private static Table usersTable = null;
+	private Table sourceTableVar = null;
+	private boolean draggedToDropTarget = false;
+	private Table projectsTable = null;
+	private Table depsTable = null;
+	private Table usersTable = null;
+	final Config config;
+	Controller controller;
 	Composite page = null;
+	
 
-	ImportPage() {
+	ImportPage(Config config) {
 		super(ImportPage.class.getSimpleName());
 		setTitle("Import Projects");
 		setDescription("Specify the projects you want to import, "
 				+ "and whether you want to import the users of a project as well as its dependencies");
+		this.config = config;
 	}
 
 	@Override
@@ -99,6 +101,9 @@ class ImportPage extends WizardPage {
 			@Override
 			public void paintControl(PaintEvent e)
 			{
+				// This is the first time in the code we know we have the OL repo path.
+				// Initialize the controller, kicking off workspace analysis in the background
+				controller = config.getOlRepoPath().map(Controller::new).orElseThrow(Error::new);
 				filterProjects("");
 				page.removePaintListener(this);
 			}
@@ -106,31 +111,24 @@ class ImportPage extends WizardPage {
 	}
 
 	void filterProjects(String pattern) {
-		List<String> projects = Controller.getController().listUnimportedProjects("*" + pattern + "*");
+		List<String> projects = controller.listUnimportedProjects("*" + pattern + "*");
 		concat(stream(depsTable),stream(usersTable)).forEach(projects::remove);
 		updateTableItems(projectsTable, projects);
 	}
 
 	public String getTitle() { return "Eclipse Liberty Project Helper"; }
-
+	
 	void importAllProjects() {
 		// Read tables now or the widget will be disposed by the time we need to
 		List<String> projectsWithDeps = stream(depsTable).collect(toList());
 		List<String> projectsWithDepsAndUsers = stream(usersTable).collect(toList());
-
-		Job job = new Job("Analyze Liberty Projects") {
-			@Override
-			protected IStatus run(IProgressMonitor monitor) {
-				Controller controller = Controller.getController();
-				controller.analyzeDependencies(monitor);
-				Set<Path> bndProjects = new HashSet<>();
-				controller.findProjectsAndDeps(projectsWithDeps, bndProjects, false);
-				controller.findProjectsAndDeps(projectsWithDepsAndUsers, bndProjects, true);
-				importProjects(controller.inDependencyOrder(bndProjects));
-				return OK_STATUS;
-			}
-		};
-		job.schedule();
+		Job.create("Explore Liberty project dependencies", monitor -> {
+			Set<Path> bndProjects = new HashSet<>();
+			controller.findProjectsAndDeps(projectsWithDeps, bndProjects, false);
+			controller.findProjectsAndDeps(projectsWithDepsAndUsers, bndProjects, true);
+			importProjects(controller.inDependencyOrder(bndProjects));				
+			return OK_STATUS;
+		}).schedule();
 	}
 
 	private Stream<String> stream(Table table) {

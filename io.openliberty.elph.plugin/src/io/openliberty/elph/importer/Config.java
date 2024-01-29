@@ -22,9 +22,13 @@ class Config {
 	private static final String OL_REPO_NODE = "open-liberty-repo";
 	private static final Bundle bundle = getBundle(Config.class);
 	/** a plugin-specific location in the Eclipse workspace */
-	private static final Path configPath = getStateLocation(bundle).toFile().toPath().resolve("settings.xml"); // IPath.toPath() is new in eclipse 3.18
+	// IPath.toPath() is new in eclipse 3.18 so use IPath.toFile().toPath()
+	private static final Path configPath = getStateLocation(bundle).toFile().toPath().resolve("settings.xml"); 
+	
+	private volatile Path olRepo;
 
-	Optional<Path> readOlRepoPath() {
+	Optional<Path> getOlRepoPath() {
+		if (null != olRepo) return Optional.of(olRepo);
 		if (!Files.exists(configPath)) {
 			System.out.println("Config file not found: " + configPath);
 			return Optional.empty();
@@ -41,6 +45,7 @@ class Config {
 	}
 	
 	void saveOlRepoPath(Path olPath) {
+		this.olRepo = olPath;
 		// overwrite entire file with just this setting
 		XMLMemento memento = XMLMemento.createWriteRoot("root");
 		memento.createChild(OL_REPO_NODE).putTextData(olPath.toString());

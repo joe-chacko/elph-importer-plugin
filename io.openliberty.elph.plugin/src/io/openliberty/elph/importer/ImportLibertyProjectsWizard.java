@@ -8,14 +8,16 @@ import org.eclipse.ui.IImportWizard;
 import org.eclipse.ui.IWorkbench;
 
 public class ImportLibertyProjectsWizard extends Wizard implements IImportWizard {	
+	final Config config = new Config();
+	
 	public ImportLibertyProjectsWizard() {		
 		setWindowTitle("Import Liberty Projects");
 	}
 
 	@Override
 	public void addPages() {
-		if (!new Config().readOlRepoPath().isPresent()) addPage(new LocateRepoPage());
-		addPage(new ImportPage());
+		if (!config.getOlRepoPath().isPresent()) addPage(new LocateRepoPage(config));
+		addPage(new ImportPage(config));
 	}
 
 	@Override

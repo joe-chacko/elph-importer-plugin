@@ -12,17 +12,15 @@
  */
 package io.openliberty.elph.bnd;
 
-import io.openliberty.elph.util.IO;
-import org.apache.commons.collections4.MultiValuedMap;
-import org.apache.commons.collections4.multimap.HashSetValuedHashMap;
-import org.eclipse.core.runtime.IProgressMonitor;
-import org.eclipse.core.runtime.SubMonitor;
-import org.jgrapht.Graph;
-import org.jgrapht.graph.AsSubgraph;
-import org.jgrapht.graph.DefaultEdge;
-import org.jgrapht.graph.EdgeReversedGraph;
-import org.jgrapht.graph.SimpleDirectedGraph;
-import org.jgrapht.traverse.TopologicalOrderIterator;
+import static io.openliberty.elph.bnd.ProjectPaths.asNames;
+import static java.util.Comparator.comparing;
+import static java.util.Spliterator.ORDERED;
+import static java.util.function.Predicate.not;
+import static java.util.stream.Collectors.joining;
+import static java.util.stream.Collectors.toCollection;
+import static java.util.stream.Collectors.toSet;
+import static java.util.stream.Collectors.toUnmodifiableSet;
+import static org.eclipse.core.runtime.Status.OK_STATUS;
 
 import java.io.IOException;
 import java.nio.file.FileSystems;
@@ -39,18 +37,25 @@ import java.util.Set;
 import java.util.Spliterators;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.CountDownLatch;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-import static io.openliberty.elph.bnd.ProjectPaths.asNames;
-import static java.util.Comparator.comparing;
-import static java.util.Spliterator.ORDERED;
-import static java.util.function.Predicate.not;
-import static java.util.stream.Collectors.joining;
-import static java.util.stream.Collectors.toCollection;
-import static java.util.stream.Collectors.toSet;
-import static java.util.stream.Collectors.toUnmodifiableSet;
+import org.apache.commons.collections4.MultiValuedMap;
+import org.apache.commons.collections4.multimap.HashSetValuedHashMap;
+import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.SubMonitor;
+import org.eclipse.core.runtime.jobs.Job;
+import org.jgrapht.Graph;
+import org.jgrapht.graph.AsSubgraph;
+import org.jgrapht.graph.DefaultEdge;
+import org.jgrapht.graph.EdgeReversedGraph;
+import org.jgrapht.graph.SimpleDirectedGraph;
+import org.jgrapht.traverse.TopologicalOrderIterator;
+
+import io.openliberty.elph.util.IO;
 
 public class BndCatalog {
     private static final String SAVE_FILE = "deps.save";
@@ -66,19 +71,28 @@ public class BndCatalog {
     final SimpleDirectedGraph<BndProject, DefaultEdge> digraph = newGraph();
     final Map<String, BndProject> nameIndex = new TreeMap<>();
     final MultiValuedMap<Path, BndProject> pathIndex = new HashSetValuedHashMap<>();
-    volatile boolean bndQueried;
+    final CountDownLatch analysisCompletion = new CountDownLatch(1);
 
-    public BndCatalog(Path bndWorkspace, IO io, Path repoSettingsDir) throws IOException {
+    public static BndCatalog create(Path bndWorkspace, IO io, Path repoSettingsDir) throws IOException {
+    	BndCatalog catalog = new BndCatalog(bndWorkspace, io, repoSettingsDir);
+    	// Asynchronously re-load saved dependencies or analyze using bnd.
+    	// The catalog will be usable for simple queries, 
+    	// but will wait for analysis to complete when exploring dependencies.
+    	Job.create("Analyze Liberty project dependencies", monitor -> catalog.loadDeps() ? OK_STATUS : catalog.analyze(monitor)).schedule();
+    	return catalog;
+    }
+    
+    private BndCatalog(Path bndWorkspace, IO io, Path repoSettingsDir) throws IOException {
         this.io = io;
         this.root = bndWorkspace;
         this.saveFile = repoSettingsDir.resolve(SAVE_FILE);
         // add the vertices
         try (var files = Files.list(bndWorkspace)) {
             files
-                    .filter(Files::isDirectory)                            // for every subdirectory
+                    .filter(Files::isDirectory)                      // for every subdirectory
                     .filter(p -> Files.exists(p.resolve("bnd.bnd"))) // that has a bnd file
-                    .map(BndProject::new)                                  // create a Project object
-                    .forEach(digraph::addVertex);                          // add it as a vertex to the graph
+                    .map(BndProject::new)                            // create a Project object
+                    .forEach(digraph::addVertex);                    // add it as a vertex to the graph
         }
 
         // index projects by name
@@ -111,68 +125,34 @@ public class BndCatalog {
                 .filter(not(p -> p.isNoBundle))
                 .filter(not(p -> p.publishWlpJarDisabled))
                 .forEach(p -> digraph.addEdge(p, buildImage));
-
-        // re-load deps if possible
-        loadDeps();
     }
 
-    private void analyzeDependenciesUsingBnd() {
-        if (bndQueried) return;
-        synchronized (this) {
-            if (bndQueried) return;
-            loadDeps();
-            if (bndQueried) return;
-            var bnd = new BndWorkspace(io, root, nameIndex::get);
-            Set<BndProject> bndProjects = digraph.vertexSet();
-            for(BndProject p: bndProjects) bnd
-                    .getBuildAndTestDependencies(p)
-                    .filter(not(p::equals))
-                    .forEach(q -> digraph.addEdge(p,q));
-
-            var text = digraph.edgeSet()
-                    .stream()
-                    .map(this::formatEdge)
-                    .collect(joining("\n", "", "\n"));
-            io.writeFile(SAVE_FILE_DESC, saveFile, text);
-            bndQueried = true;
+    private IStatus analyze(IProgressMonitor pm) {
+        Set<BndProject> bndProjects = digraph.vertexSet();
+        var bnd = new BndWorkspace(io, root, nameIndex::get);
+        SubMonitor subMonitor = SubMonitor.convert(pm, bndProjects.size());
+        for(BndProject p: bndProjects) {
+			subMonitor.setTaskName("Analyzing " + p.name);
+			subMonitor.split(1);
+        	bnd.getBuildAndTestDependencies(p)
+        			.filter(not(p::equals))
+        			.forEach(q -> digraph.addEdge(p,q));
         }
-    }
-
-    public void analyze(IProgressMonitor pm) {
-        bndQueried = false;
-        synchronized (this) {
-            if (bndQueried) return;
-
-            var bnd = new BndWorkspace(io, root, nameIndex::get);
-            Set<BndProject> bndProjects = digraph.vertexSet();
-            SubMonitor subMonitor = SubMonitor.convert(pm, bndProjects.size());
-            for(BndProject p: bndProjects) {
-				subMonitor.setTaskName("Analyzing " + p.name);
-				subMonitor.split(1);
-            	bnd.getBuildAndTestDependencies(p)
-            			.filter(not(p::equals))
-            			.forEach(q -> digraph.addEdge(p,q));
-            }
-
-            var text = digraph.edgeSet()
-                    .stream()
-                    .map(this::formatEdge)
-                    .collect(joining("\n", "", "\n"));
-            io.writeFile(SAVE_FILE_DESC, saveFile, text);
-            bndQueried = true;
-        }
+        var text = digraph.edgeSet()
+                .stream()
+                .map(this::formatEdge)
+                .collect(joining("\n", "", "\n"));
+        io.writeFile(SAVE_FILE_DESC, saveFile, text);
+        analysisCompletion.countDown();
+        return OK_STATUS;
     }
     
-    public boolean isAnalysisComplete() {
-    	return bndQueried;
-    }
-
     private String formatEdge(DefaultEdge e) {
         return "%s -> %s".formatted(digraph.getEdgeSource(e), digraph.getEdgeTarget(e));
     }
 
-    private void loadDeps() {
-        if (!Files.exists(saveFile)) return;
+    private boolean loadDeps() {
+        if (!Files.exists(saveFile)) return false;
         FileTime saveTime = IO.getLastModified(saveFile);
         Predicate<BndProject> isNewer = p -> saveTime.compareTo(p.timestamp) < 0;
         var newerCount = nameIndex.values()
@@ -181,9 +161,10 @@ public class BndCatalog {
                 .peek(p -> io.debugf("bnd file for %s is newer than save file %s", p, saveFile))
                 .count();
         io.logf("%d projects have bnd files newer than %s", newerCount, saveFile);
-        if (newerCount > 0) return;
+        if (newerCount > 0) return false;
         io.readFile(SAVE_FILE_DESC, saveFile, this::loadDep);
-        bndQueried = true;
+        analysisCompletion.countDown();
+        return true;
     }
 
     private void loadDep(String dep) {
@@ -200,6 +181,14 @@ public class BndCatalog {
             digraph.addEdge(source, target);
         }
     }
+    
+    private void waitForAnalysis() {
+		try {
+			analysisCompletion.await();
+		} catch(InterruptedException e) {
+			throw new Error(e);
+		}		
+	}
 
     public Stream<Path> findProjects(String pattern) {
         @SuppressWarnings("resource")
@@ -228,7 +217,7 @@ public class BndCatalog {
     }
 
     public Set<Path> getLeavesOfSubset(Collection<Path> subset, int max) {
-        analyzeDependenciesUsingBnd();
+        waitForAnalysis();
         assert max > 0;
         var nodes = asNames(subset).map(this::find).collect(toUnmodifiableSet());
         var subGraph = new AsSubgraph<>(digraph, nodes);
@@ -242,8 +231,8 @@ public class BndCatalog {
         return leaves;
     }
 
-    public Stream<Path> getRequiredProjectPaths(Collection<String> projectNames) {
-        analyzeDependenciesUsingBnd();
+	public Stream<Path> getRequiredProjectPaths(Collection<String> projectNames) {
+        waitForAnalysis();
         var deps = getProjectAndDependencySubgraph(projectNames);
         var rDeps = new EdgeReversedGraph<>(deps);
         var topo = new TopologicalOrderIterator<>(rDeps, comparing(p -> p.name));
@@ -251,7 +240,7 @@ public class BndCatalog {
     }
 
     public Stream<Path> inTopologicalOrder(Stream<Path> paths) {
-        analyzeDependenciesUsingBnd();
+        waitForAnalysis();
         var projects = paths.map(ProjectPaths::toName).map(nameIndex::get).collect(toSet());
         var subGraph = new EdgeReversedGraph<>(new AsSubgraph<>(digraph, projects));
         var topo = new TopologicalOrderIterator<>(subGraph, comparing(p -> p.name));
@@ -259,7 +248,7 @@ public class BndCatalog {
     }
 
     public Stream<Path> getDependentProjectPaths(Collection<String> projectNames) {
-        analyzeDependenciesUsingBnd();
+        waitForAnalysis();
         return projectNames.stream()
                 .map(this::find)
                 .map(digraph::incomingEdgesOf)
@@ -270,7 +259,7 @@ public class BndCatalog {
     }
 
     Graph<BndProject, ?> getProjectAndDependencySubgraph(Collection<String> projectNames) {
-        analyzeDependenciesUsingBnd();
+        waitForAnalysis();
         // collect the named projects to start with
         var projects = projectNames.stream()
                 .map(this::find)

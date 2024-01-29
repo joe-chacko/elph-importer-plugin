@@ -1,6 +1,6 @@
 package io.openliberty.elph.importer;
 
-import static io.openliberty.elph.importer.EclipseProjects.listProjects;
+import static io.openliberty.elph.importer.EclipseWorkspace.listProjects;
 import static java.util.stream.Collectors.toCollection;
 
 import java.io.IOError;
@@ -18,27 +18,29 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.eclipse.core.runtime.IProgressMonitor;
-
 import io.openliberty.elph.bnd.BndCatalog;
 import io.openliberty.elph.util.IO;
 
 class Controller {
-	/** The Open Liberty repo location */
-	private final IO io = new IO();
-	private final Path repo;
-	private final Path bndWorkspace;
-	private final BndCatalog bndProjects;
+	private static final IO io = new IO();
 	
-	static Controller getController() {
-		return new Controller(new Config().readOlRepoPath().get());
-	}
+	/** The Open Liberty repo location */
+	private final Path repo;
+	private final BndCatalog bndCatalog; 
 	
 	Controller(Path repo) {
 		this.repo = validateRepo(repo);
-		this.bndWorkspace = repo.resolve("dev");
+		Path bndWorkspaceDir = repo.resolve("dev");
+		Path repoSettingsDir = repo.resolve(".elph");
+        if (!Files.isDirectory(repoSettingsDir)) {
+            io.verifyOrCreateDir("Liberty git repository Elph settings directory", repoSettingsDir);
+            // make sure the entire contents of the directory are ignored, including the .gitignore
+            io.writeFile(".lct git ignore file", repoSettingsDir.resolve(".gitignore"), "*");
+        }
 		try {
-			this.bndProjects = new BndCatalog(bndWorkspace, io, getRepoSettingsDir());
+			this.bndCatalog = BndCatalog.create(bndWorkspaceDir, io, repoSettingsDir);
+			// import the cnf project (kicking off more background work in the bndtools plugin)
+			EclipseWorkspace.importCnf(bndWorkspaceDir);
 		} catch (IOException e) {
 			e.printStackTrace();
 			throw new IOError(e);
@@ -49,16 +51,11 @@ class Controller {
 		this(Paths.get(repo));
 	}
 	
-	
-	void analyzeDependencies(IProgressMonitor monitor) {
-		bndProjects.analyze(monitor);
-	}
-	
 	Path getRepo() {
 		return repo;
 	}
 	
-    Path getRepoSettingsDir() {
+    static Path getRepoSettingsDir(Path repo) {
         Path dir = repo.resolve(".elph");
         if (!Files.isDirectory(dir)) {
             io.verifyOrCreateDir("LCT git repository settings directory", dir);
@@ -69,7 +66,7 @@ class Controller {
     }
 
 	List<String> listBndProjects(String pattern) {
-		return bndProjects.findProjects(pattern).map(Controller::toName).collect(toCollection(ArrayList::new));
+		return bndCatalog.findProjects(pattern).map(Controller::toName).collect(toCollection(ArrayList::new));
 	}
 	
 	List<String> listUnimportedProjects(String pattern) {
@@ -79,7 +76,7 @@ class Controller {
 	}
 
 	void findProjectsAndDeps(Collection<String> names, Collection<? super Path> collection, boolean includeUsers) {
-		Set<Path> set = bndProjects.findProjects(names.stream()).collect(Collectors.toSet());
+		Set<Path> set = bndCatalog.findProjects(names.stream()).collect(Collectors.toSet());
 		// add users first to pick up dependencies of users
 		if (includeUsers) addUsers(set);
 		addDeps(set);
@@ -90,15 +87,15 @@ class Controller {
 	}
 
 	private void addDeps(Set<Path> set) {
-		bndProjects.getRequiredProjectPaths(toNames(set)).forEach(set::add);
+		bndCatalog.getRequiredProjectPaths(toNames(set)).forEach(set::add);
 	}
 
 	private void addUsers(Set<Path> set) {
-		bndProjects.getDependentProjectPaths(toNames(set)).forEach(set::add);
+		bndCatalog.getDependentProjectPaths(toNames(set)).forEach(set::add);
 	}
 	
 	Queue<Path> inDependencyOrder(Collection<Path> projects) {
-		return bndProjects.inTopologicalOrder(projects.stream()).collect(toCollection(LinkedList::new));
+		return bndCatalog.inTopologicalOrder(projects.stream()).collect(toCollection(LinkedList::new));
 	}
 	
     private static Path validateRepo(Path olRepo) throws RuntimeException {
