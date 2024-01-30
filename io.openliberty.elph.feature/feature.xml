@@ -2,7 +2,7 @@
 <feature
       id="io.openliberty.elph.feature"
       label="Elph"
-      version="1.0.6.beta"
+      version="1.0.7.beta"
       provider-name="IBM">
 
    <description url="https://github.com/joe-chacko/elph-importer-plugin">

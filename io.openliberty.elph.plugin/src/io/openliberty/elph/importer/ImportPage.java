@@ -2,6 +2,7 @@ package io.openliberty.elph.importer;
 
 import static io.openliberty.elph.importer.EclipseWorkspace.importProjects;
 import static java.io.File.separator;
+import static java.util.Collections.list;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toCollection;
 import static java.util.stream.Collectors.toList;
@@ -17,6 +18,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.StringTokenizer;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -48,8 +50,6 @@ import org.eclipse.swt.widgets.Table;
 import org.eclipse.swt.widgets.TableColumn;
 import org.eclipse.swt.widgets.TableItem;
 import org.eclipse.swt.widgets.Text;
-
-//import io.openliberty.elph.cmd.ElphCommand;
 
 class ImportPage extends WizardPage {
 	private Table sourceTableVar = null;
@@ -301,7 +301,9 @@ class ImportPage extends WizardPage {
 					String data = (String)event.data;
 					if (sourceTableVar != targetTable) {
 						draggedToDropTarget = true;
-						int[] indices = Stream.of(data.split(separator))
+						int[] indices = list(new StringTokenizer(data,separator))
+								.stream()
+								.map(String.class::cast)
 								.mapToInt(this::addItem)
 								.toArray();
 						targetTable.deselectAll();
