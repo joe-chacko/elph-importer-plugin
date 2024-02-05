@@ -45,7 +45,6 @@ enum EclipseWorkspace {
 		return Stream.of(getWorkspace().getRoot().getProjects())
 			.map(p-> p.getName())
 			// filter out any that aren't in the bnd workspace
-			.peek(n -> System.out.println("Existing project: " + n))
 			.collect(toSet());
 	}
 	

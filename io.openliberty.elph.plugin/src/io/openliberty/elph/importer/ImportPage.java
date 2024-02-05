@@ -87,10 +87,17 @@ class ImportPage extends WizardPage {
 		new Label(page, SWT.NONE);
 		new Label(page, SWT.NONE);
 
-		projectsTable = createTable(page, "All Projects");
+		new Label(page, SWT.NONE);
+		new Label(page, SWT.NONE);
+		new Label(page, SWT.NONE);
 
-		depsTable = createTable(page, "Import Deps");
-		usersTable = createTable(page, "Import Deps+Users");
+		Label instructionLabel = new Label(page, SWT.WRAP);
+		instructionLabel.setText("Drag the project to the box matching your choice of dependency import");
+		instructionLabel.setLayoutData(new GridData(SWT.CENTER, SWT.BOTTOM, true, false, 3, 1));
+
+		projectsTable = createTable(page, "All Projects");
+		depsTable = createTable(page, "Import Dependencies");
+		usersTable = createTable(page, "Import Dependencies + Users of Project");
 
 		projectFilterText.addListener(SWT.KeyUp, new Listener() {
 			public void handleEvent(Event event) { filterProjects(projectFilterText.getText()); }
@@ -142,7 +149,6 @@ class ImportPage extends WizardPage {
 		table.setHeaderVisible(true);
 		TableColumn col = new TableColumn(table, SWT.NONE);
 		col.setText(title);
-		col.setResizable(false);
 
 		table.addControlListener(new ControlListener() {
 			@Override
@@ -167,7 +173,11 @@ class ImportPage extends WizardPage {
 			TableItem item = new TableItem(table, SWT.NONE);
 			item.setText(new String[] {project});
 		}
-		//resize column to be either max table size or max size of text in column
+		resizeColumn(table);
+	}
+
+	private void resizeColumn (Table table) {
+		//resize column to be either max size of text in column or max table size if table width is larger than text
 		TableColumn col = table.getColumn(0);
 		col.pack();
 		Rectangle rect = table.getClientArea();
@@ -176,7 +186,6 @@ class ImportPage extends WizardPage {
 
 	private void sortTable(Table table) {
 		// record selection
-		System.out.println("### table item count " + table.getItemCount());
 		Set<String> selected = Stream.of(table.getSelection()).map(TableItem::getText).collect(Collectors.toSet());
 		// clear selection
 		table.deselectAll();
@@ -237,6 +246,7 @@ class ImportPage extends WizardPage {
 				if (event.detail == DND.DROP_MOVE && draggedToDropTarget) {
 					sourceTable.remove(sourceTable.getSelectionIndices());
 					sourceTable.deselectAll();
+					resizeColumn(sourceTable);
 				}
 				if (depsTable.getItemCount()>0 || usersTable.getItemCount()>0) setPageComplete(true);
 				else setPageComplete(false);
@@ -288,7 +298,6 @@ class ImportPage extends WizardPage {
 
 			public void drop(DropTargetEvent event) {
 				if (textTransfer.isSupportedType(event.currentDataType)) {
-					System.out.println("Dropping data of type " + event.data.getClass());
 					String data = (String)event.data;
 					if (sourceTableVar != targetTable) {
 						draggedToDropTarget = true;
@@ -298,6 +307,7 @@ class ImportPage extends WizardPage {
 						targetTable.deselectAll();
 						targetTable.select(indices);
 						sortTable(targetTable);
+						resizeColumn(targetTable);
 					} else event.detail = DND.DROP_COPY;
 				}
 			}
