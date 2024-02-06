@@ -77,27 +77,29 @@ class ImportPage extends WizardPage {
 		setPageComplete(false);
 
 		page.setLayout(new GridLayout(3, false));
-		Label importLabel = new Label(page, SWT.WRAP);
-		importLabel.setText("Type to filter the project list (use * for wildcard)");
-		importLabel.setLayoutData(new GridData(SWT.LEFT, SWT.BOTTOM, true, false, 3, 1));
+
+		// ROW 1
+
+		Label projectFilterLabel = new Label(page, SWT.WRAP);
+		projectFilterLabel.setText("Type to filter the project list (use * for wildcard)");
+		projectFilterLabel.setLayoutData(new GridData(SWT.LEFT, SWT.BOTTOM, true, false, 3, 1));
+
+		// ROW 2
 
 		Text projectFilterText = new Text(page, SWT.BORDER);
-		projectFilterText.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, false, false, 1, 1));
+		projectFilterText.setLayoutData(new GridData(SWT.FILL, SWT.TOP, false, false, 3, 1));
+
+		// ROW 3 (empty)
 
 		new Label(page, SWT.NONE);
 		new Label(page, SWT.NONE);
-
-		new Label(page, SWT.NONE);
-		new Label(page, SWT.NONE);
 		new Label(page, SWT.NONE);
 
-		Label instructionLabel = new Label(page, SWT.WRAP);
-		instructionLabel.setText("Drag the project to the box matching your choice of dependency import");
-		instructionLabel.setLayoutData(new GridData(SWT.CENTER, SWT.BOTTOM, true, false, 3, 1));
+		// ROW 4
 
-		projectsTable = createTable(page, "All Projects");
-		depsTable = createTable(page, "Import Dependencies");
-		usersTable = createTable(page, "Import Dependencies + Users of Project");
+		projectsTable = createTable(page, "Unimported Projects (drag to import)");
+		depsTable = createTable(page, "Projects to import (with deps)");
+		usersTable = createTable(page, "Projects to import (with users and deps)");
 
 		projectFilterText.addListener(SWT.KeyUp, new Listener() {
 			public void handleEvent(Event event) { filterProjects(projectFilterText.getText()); }
