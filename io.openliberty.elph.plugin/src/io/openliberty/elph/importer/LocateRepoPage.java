@@ -8,8 +8,6 @@ import org.eclipse.jface.wizard.WizardPage;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
-import org.eclipse.swt.graphics.Color;
-import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
@@ -42,35 +40,28 @@ class LocateRepoPage extends WizardPage {
 		Button fileBrowser = new Button(page, SWT.PUSH);
 		fileBrowser.setText("Browse");
 		fileBrowser.addSelectionListener(new SelectionAdapter() {
-			public void widgetSelected(SelectionEvent e) {
+			public void widgetSelected(SelectionEvent event) {
 				DirectoryDialog dialog = new DirectoryDialog(page.getShell(), SWT.NULL);
 				String dir = dialog.open();
-				Optional<Path> repo = Optional.ofNullable(dir)
-					.map(Controller::new)
-					.map(Controller::getRepo);
-					
-				
-				if (repo.isPresent()) {
+				try {
+					Path repo = Optional.ofNullable(dir)
+						.map(Controller::new)
+						.map(Controller::getRepo)
+						.orElseThrow(() -> new Exception("Please choose a valid directory for your Open Liberty repository. "));
 					// save the setting
-					config.saveOlRepoPath(repo.get());
+					config.saveOlRepoPath(repo);
 					// display the setting
-					Color black = new Color(new RGB(0, 0, 0));
-					olLabel.setForeground(black);
 					olLabel.setText(olPathTemplate + dir);
 					// let the user continue
 					setPageComplete(true);
-				} else {
+				} catch (Exception e) {
 					setPageComplete(false);
-					errorDialogue(parent, "Please choose a valid directory for your Open Liberty repository. "
-							+ "It must contain a 'dev' folder.");
-					olLabel.setText(olPathTemplate + "N/A");
-					Color red = new Color(new RGB(255, 0, 0));
-					olLabel.setForeground(red);
+					errorDialogue(parent, e.getLocalizedMessage());
+					olLabel.setText(olPathTemplate + "<unspecified>");
 				}
 			}
 		});
 	}	
-	
 
 	private void errorDialogue(Composite parent, String errMsg) { 
 		MessageDialog.openError(parent.getShell(), getTitle(), errMsg);
